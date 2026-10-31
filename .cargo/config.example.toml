@@ -1,0 +1,4 @@
+[env]
+DOMAIN = "example.com"
+SUBDOMAIN = "www"
+API_KEY = "api key"

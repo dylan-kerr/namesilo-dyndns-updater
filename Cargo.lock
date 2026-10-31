@@ -298,6 +298,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simple-eyre",
+ "tempfile",
  "ureq",
 ]
 
