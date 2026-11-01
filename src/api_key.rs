@@ -39,11 +39,8 @@ mod tests {
     use super::*;
 
     mod from_env {
-        use std::sync::Mutex;
-
         use super::*;
-
-        static SERIAL_GUARD: Mutex<()> = Mutex::new(());
+        use crate::test_helpers::run_env_var_test;
 
         #[test]
         fn returns_key_from_credential_file_if_available() {
@@ -54,15 +51,14 @@ mod tests {
             )
             .unwrap();
 
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::set_var("CREDENTIALS_DIRECTORY", temp_dir.path());
-                env::set_var("API_KEY", " from env var ");
-            }
+            let api_key = run_env_var_test(|| {
+                unsafe {
+                    env::set_var("CREDENTIALS_DIRECTORY", temp_dir.path());
+                    env::set_var("API_KEY", " from env var ");
+                }
 
-            let api_key = ApiKey::from_env().unwrap();
-
-            drop(guard);
+                ApiKey::from_env().unwrap()
+            });
 
             assert_eq!(api_key.0, "from credential");
         }
@@ -71,45 +67,42 @@ mod tests {
         fn returns_key_from_env_var_if_credential_file_missing() {
             let temp_dir = tempfile::tempdir().unwrap();
 
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::set_var("CREDENTIALS_DIRECTORY", temp_dir.path());
-                env::set_var("API_KEY", " from env var ");
-            }
+            let api_key = run_env_var_test(|| {
+                unsafe {
+                    env::set_var("CREDENTIALS_DIRECTORY", temp_dir.path());
+                    env::set_var("API_KEY", " from env var ");
+                }
 
-            let api_key = ApiKey::from_env().unwrap();
-
-            drop(guard);
+                ApiKey::from_env().unwrap()
+            });
 
             assert_eq!(api_key.0, "from env var");
         }
 
         #[test]
         fn returns_key_from_env_var_if_credential_dir_not_specified() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::set_var("API_KEY", " from env var ");
-            }
+            let api_key = run_env_var_test(|| {
+                unsafe {
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::set_var("API_KEY", " from env var ");
+                }
 
-            let api_key = ApiKey::from_env().unwrap();
-
-            drop(guard);
+                ApiKey::from_env().unwrap()
+            });
 
             assert_eq!(api_key.0, "from env var");
         }
 
         #[test]
         fn returns_err_if_neither_env_var_specified() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::remove_var("API_KEY");
-            }
+            let result = run_env_var_test(|| {
+                unsafe {
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::remove_var("API_KEY");
+                }
 
-            let result = ApiKey::from_env();
-
-            drop(guard);
+                ApiKey::from_env()
+            });
 
             assert!(result.is_err());
         }

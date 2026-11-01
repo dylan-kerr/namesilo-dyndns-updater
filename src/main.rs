@@ -8,6 +8,8 @@ use crate::{
 mod api;
 mod api_key;
 mod config;
+#[cfg(test)]
+mod test_helpers;
 
 fn find_matching_record<'a>(
     list_response: &'a ListResponse,

@@ -32,25 +32,21 @@ mod tests {
     use super::*;
 
     mod from_env {
-        use std::sync::Mutex;
-
         use super::*;
-
-        static SERIAL_GUARD: Mutex<()> = Mutex::new(());
+        use crate::test_helpers::run_env_var_test;
 
         #[test]
         fn trims_whitespace() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::set_var("DOMAIN", " domain ");
-                env::set_var("SUBDOMAIN", " subdomain ");
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::set_var("API_KEY", " api key ");
-            }
+            let config = run_env_var_test(|| {
+                unsafe {
+                    env::set_var("DOMAIN", " domain ");
+                    env::set_var("SUBDOMAIN", " subdomain ");
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::set_var("API_KEY", " api key ");
+                }
 
-            let config = Config::from_env().unwrap();
-
-            drop(guard);
+                Config::from_env().unwrap()
+            });
 
             assert_eq!(config.domain, "domain");
             assert_eq!(config.subdomain, "subdomain");
@@ -59,51 +55,48 @@ mod tests {
 
         #[test]
         fn returns_err_if_domain_not_specified() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::remove_var("DOMAIN");
-                env::set_var("SUBDOMAIN", " subdomain ");
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::set_var("API_KEY", " api key ");
-            }
+            let result = run_env_var_test(|| {
+                unsafe {
+                    env::remove_var("DOMAIN");
+                    env::set_var("SUBDOMAIN", " subdomain ");
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::set_var("API_KEY", " api key ");
+                }
 
-            let result = Config::from_env();
-
-            drop(guard);
+                Config::from_env()
+            });
 
             assert!(result.is_err());
         }
 
         #[test]
         fn return_err_if_subdomain_not_specified() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::set_var("DOMAIN", " domain ");
-                env::remove_var("SUBDOMAIN");
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::set_var("API_KEY", " api key ");
-            }
+            let result = run_env_var_test(|| {
+                unsafe {
+                    env::set_var("DOMAIN", " domain ");
+                    env::remove_var("SUBDOMAIN");
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::set_var("API_KEY", " api key ");
+                }
 
-            let result = Config::from_env();
-
-            drop(guard);
+                Config::from_env()
+            });
 
             assert!(result.is_err());
         }
 
         #[test]
         fn returns_err_if_api_key_not_specified() {
-            let guard = SERIAL_GUARD.lock().unwrap();
-            unsafe {
-                env::set_var("DOMAIN", " domain ");
-                env::set_var("SUBDOMAIN", " subdomain ");
-                env::remove_var("CREDENTIALS_DIRECTORY");
-                env::remove_var("API_KEY");
-            }
+            let result = run_env_var_test(|| {
+                unsafe {
+                    env::set_var("DOMAIN", " domain ");
+                    env::set_var("SUBDOMAIN", " subdomain ");
+                    env::remove_var("CREDENTIALS_DIRECTORY");
+                    env::remove_var("API_KEY");
+                }
 
-            let result = Config::from_env();
-
-            drop(guard);
+                Config::from_env()
+            });
 
             assert!(result.is_err());
         }
