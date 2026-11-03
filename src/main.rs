@@ -1,5 +1,3 @@
-use simple_eyre::eyre::{OptionExt, Result};
-
 use crate::{
     api::{Api, ListResponse, ListResponseRecord},
     config::Config,
@@ -14,18 +12,16 @@ mod test_helpers;
 fn find_matching_record<'a>(
     list_response: &'a ListResponse,
     subdomain: &str,
-) -> Result<&'a ListResponseRecord> {
+) -> Result<&'a ListResponseRecord, String> {
     list_response
         .reply
         .resource_record
         .iter()
         .find(|&r| r.type_ == "A" && r.host == subdomain)
-        .ok_or_eyre("No matching record in API response")
+        .ok_or_else(|| "No matching record in API response".to_string())
 }
 
-fn main() -> Result<()> {
-    simple_eyre::install()?;
-
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env()?;
     let api = Api::new(config.api_key, config.domain);
 

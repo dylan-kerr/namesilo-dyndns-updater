@@ -1,7 +1,6 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use serde::Deserialize;
-use simple_eyre::eyre::{Result, WrapErr, eyre};
 use ureq::{
     Agent,
     tls::{RootCerts, TlsConfig, TlsProvider},
@@ -49,6 +48,39 @@ pub struct UpdateResponse {
 }
 
 #[derive(Debug)]
+pub enum Error {
+    Http {
+        context: &'static str,
+        source: ureq::Error,
+    },
+    Json {
+        context: &'static str,
+        json: String,
+        source: serde_json::Error,
+    },
+    Validation {
+        context: &'static str,
+        json: String,
+    },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Http { context, source } => write!(f, "{context}: {source}"),
+            Self::Json {
+                context,
+                json,
+                source,
+            } => write!(f, "{context}: {json}\n{source}"),
+            Self::Validation { context, json } => write!(f, "{context}: {json}"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+#[derive(Debug)]
 pub struct Api {
     agent: Agent,
     domain: String,
@@ -64,7 +96,7 @@ impl Api {
         }
     }
 
-    pub fn list(&self) -> Result<ListResponse> {
+    pub fn list(&self) -> Result<ListResponse, Error> {
         let list_response_json: String = retry(|| {
             self.agent
                 .get(format!("{BASE_URL}/dnsListRecords"))
@@ -75,24 +107,33 @@ impl Api {
                     ("domain", &self.domain),
                 ])
                 .call()
-                .wrap_err("Call to dnsListRecords failed")?
+                .map_err(|source| Error::Http {
+                    context: "Call to dnsListRecords failed",
+                    source,
+                })?
                 .body_mut()
                 .read_to_string()
-                .wrap_err("Reading dnsListRecords response failed")
+                .map_err(|source| Error::Http {
+                    context: "Reading dnsListRecords response failed",
+                    source,
+                })
         })?;
         let list_response: ListResponse =
-            serde_json::from_str(&list_response_json).wrap_err_with(|| {
-                format!("Parsing dnsListRecords response failed: {list_response_json}")
+            serde_json::from_str(&list_response_json).map_err(|source| Error::Json {
+                context: "Parsing dnsListRecords response failed",
+                json: list_response_json.clone(),
+                source,
             })?;
         if list_response.reply.code != 300 {
-            return Err(eyre!(
-                "Bad response from dnsListRecords operation: {list_response_json}"
-            ));
+            return Err(Error::Validation {
+                context: "Bad response from dnsListRecords operation",
+                json: list_response_json,
+            });
         }
         Ok(list_response)
     }
 
-    pub fn update(&self, record: &ListResponseRecord, ip: &str) -> Result<()> {
+    pub fn update(&self, record: &ListResponseRecord, ip: &str) -> Result<(), Error> {
         let update_response_json: String = retry(|| {
             self.agent
                 .get(format!("{BASE_URL}/dnsUpdateRecord"))
@@ -107,19 +148,28 @@ impl Api {
                     ("rrttl", &record.ttl.to_string()),
                 ])
                 .call()
-                .wrap_err("Call to dnsUpdateRecord failed")?
+                .map_err(|source| Error::Http {
+                    context: "Call to dnsUpdateRecord failed",
+                    source,
+                })?
                 .body_mut()
                 .read_to_string()
-                .wrap_err("Reading dnsUpdateRecord response failed")
+                .map_err(|source| Error::Http {
+                    context: "Reading dnsUpdateRecord response failed",
+                    source,
+                })
         })?;
-        let update_response: UpdateResponse = serde_json::from_str(&update_response_json)
-            .wrap_err_with(|| {
-                format!("Parsing dnsUpdateRecord response failed: {update_response_json}")
+        let update_response: UpdateResponse =
+            serde_json::from_str(&update_response_json).map_err(|source| Error::Json {
+                context: "Parsing dnsUpdateRecord response failed",
+                json: update_response_json.clone(),
+                source,
             })?;
         if update_response.reply.code != 300 {
-            return Err(eyre!(
-                "Bad response from dnsUpdateRecord operation: {update_response_json}"
-            ));
+            return Err(Error::Validation {
+                context: "Bad response from dnsUpdateRecord operation",
+                json: update_response_json,
+            });
         }
         Ok(())
     }
@@ -139,9 +189,10 @@ fn configure_agent() -> Agent {
         .into()
 }
 
-fn retry<T, F>(f: F) -> Result<T>
+fn retry<T, F, E>(f: F) -> Result<T, E>
 where
-    F: Fn() -> Result<T>,
+    F: Fn() -> Result<T, E>,
+    E: std::error::Error,
 {
     retry::retry_with_index(
         retry::delay::Exponential::from_millis(1_000).take(5),

@@ -1,19 +1,19 @@
 use std::{env, fmt, fs, path::Path};
 
-use simple_eyre::eyre::{Result, WrapErr};
-
 pub struct ApiKey(pub String);
 
 impl ApiKey {
-    pub fn from_env() -> Result<Self> {
+    pub fn from_env() -> Result<Self, String> {
         let api_key = env::var("CREDENTIALS_DIRECTORY")
-            .wrap_err("Environment variable CREDENTIALS_DIRECTORY not set")
+            .map_err(|_| "Environment variable CREDENTIALS_DIRECTORY not set".to_string())
             .and_then(|dir| {
                 fs::read_to_string(Path::new(&dir).join("api-key"))
-                    .wrap_err("Failed to read credential file")
+                    .map_err(|_| "Failed to read credential file".to_string())
             })
             .or_else(|_| env::var("API_KEY"))
-            .wrap_err("Must set either CREDENTIALS_DIRECTORY or API_KEY environment variables")?;
+            .map_err(|_| {
+                "Must set either CREDENTIALS_DIRECTORY or API_KEY environment variables".to_string()
+            })?;
         Ok(Self(api_key.trim().to_string()))
     }
 }
