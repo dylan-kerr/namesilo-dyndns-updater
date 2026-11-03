@@ -65,20 +65,21 @@ impl Api {
     }
 
     pub fn list(&self) -> Result<ListResponse> {
-        let list_response_json: String = self
-            .agent
-            .get(format!("{BASE_URL}/dnsListRecords"))
-            .query_pairs(vec![
-                ("version", "1"),
-                ("type", "json"),
-                ("key", &self.key.0),
-                ("domain", &self.domain),
-            ])
-            .call()
-            .wrap_err("Call to dnsListRecords failed")?
-            .body_mut()
-            .read_to_string()
-            .wrap_err("Reading dnsListRecords response failed")?;
+        let list_response_json: String = retry(|| {
+            self.agent
+                .get(format!("{BASE_URL}/dnsListRecords"))
+                .query_pairs([
+                    ("version", "1"),
+                    ("type", "json"),
+                    ("key", &self.key.0),
+                    ("domain", &self.domain),
+                ])
+                .call()
+                .wrap_err("Call to dnsListRecords failed")?
+                .body_mut()
+                .read_to_string()
+                .wrap_err("Reading dnsListRecords response failed")
+        })?;
         let list_response: ListResponse =
             serde_json::from_str(&list_response_json).wrap_err_with(|| {
                 format!("Parsing dnsListRecords response failed: {list_response_json}")
@@ -92,24 +93,25 @@ impl Api {
     }
 
     pub fn update(&self, record: &ListResponseRecord, ip: &str) -> Result<()> {
-        let update_response_json: String = self
-            .agent
-            .get(format!("{BASE_URL}/dnsUpdateRecord"))
-            .query_pairs(vec![
-                ("version", "1"),
-                ("type", "json"),
-                ("key", &self.key.0),
-                ("domain", &self.domain),
-                ("rrid", &record.record_id),
-                ("rrhost", &record.host),
-                ("rrvalue", ip),
-                ("rrttl", &record.ttl.to_string()),
-            ])
-            .call()
-            .wrap_err("Call to dnsUpdateRecord failed")?
-            .body_mut()
-            .read_to_string()
-            .wrap_err("Reading dnsUpdateRecord response failed")?;
+        let update_response_json: String = retry(|| {
+            self.agent
+                .get(format!("{BASE_URL}/dnsUpdateRecord"))
+                .query_pairs([
+                    ("version", "1"),
+                    ("type", "json"),
+                    ("key", &self.key.0),
+                    ("domain", &self.domain),
+                    ("rrid", &record.record_id),
+                    ("rrhost", &record.host),
+                    ("rrvalue", ip),
+                    ("rrttl", &record.ttl.to_string()),
+                ])
+                .call()
+                .wrap_err("Call to dnsUpdateRecord failed")?
+                .body_mut()
+                .read_to_string()
+                .wrap_err("Reading dnsUpdateRecord response failed")
+        })?;
         let update_response: UpdateResponse = serde_json::from_str(&update_response_json)
             .wrap_err_with(|| {
                 format!("Parsing dnsUpdateRecord response failed: {update_response_json}")
@@ -135,4 +137,20 @@ fn configure_agent() -> Agent {
         )
         .build()
         .into()
+}
+
+fn retry<T, F>(f: F) -> Result<T>
+where
+    F: Fn() -> Result<T>,
+{
+    retry::retry_with_index(
+        retry::delay::Exponential::from_millis(1_000).take(5),
+        |attempt| {
+            f().map_err(|e| {
+                println!("Error on attempt {attempt}: {e:?}");
+                e
+            })
+        },
+    )
+    .map_err(|e| e.error)
 }

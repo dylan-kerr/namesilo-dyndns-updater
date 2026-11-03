@@ -295,6 +295,7 @@ dependencies = [
 name = "namesilo-dyndns-updater"
 version = "0.1.0"
 dependencies = [
+ "retry",
  "serde",
  "serde_json",
  "simple-eyre",
@@ -412,6 +413,12 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "retry"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cab9bd343c737660e523ee69f788018f3db686d537d2fd0f99c9f747c1bda4f"
 
 [[package]]
 name = "ring"
